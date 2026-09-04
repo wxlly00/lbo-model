@@ -26,27 +26,35 @@ def initial_debt_amounts(
 def build_sources_and_uses(
     entry: EntryAssumptions, debt: DebtAssumptions
 ) -> pd.DataFrame:
-    """Build a balanced acquisition funding schedule with equity as the plug."""
+    """Build a standard PE acquisition Sources & Uses schedule.
+
+    Equity purchase price is bridged from enterprise value using existing debt
+    and cash. Existing debt is then refinanced as a separate use. The default
+    fictional case is cash-free / debt-free, but the bridge remains explicit so
+    the transaction logic is visible.
+    """
 
     debt_amounts = initial_debt_amounts(entry, debt)
-    total_debt = sum(debt_amounts.values())
+    total_new_debt = sum(debt_amounts.values())
     transaction_fees = entry.entry_enterprise_value * entry.transaction_fee_pct
-    financing_fees = total_debt * entry.financing_fee_pct
+    financing_fees = total_new_debt * entry.financing_fee_pct
     total_uses = (
-        entry.entry_enterprise_value
+        entry.equity_purchase_price
+        + entry.existing_debt
         + transaction_fees
         + financing_fees
-        + entry.minimum_cash
+        + entry.minimum_cash_funding
     )
-    sponsor_equity = total_uses - total_debt
+    sponsor_equity = total_uses - total_new_debt
     if sponsor_equity <= 0:
         raise ValueError("Debt sources cannot exceed total acquisition uses.")
 
     rows: list[dict[str, str | float]] = [
-        {"Type": "Use", "Item": "Purchase of enterprise value", "Amount": entry.entry_enterprise_value},
+        {"Type": "Use", "Item": "Equity purchase price", "Amount": entry.equity_purchase_price},
+        {"Type": "Use", "Item": "Refinance existing debt", "Amount": entry.existing_debt},
         {"Type": "Use", "Item": "Transaction fees", "Amount": transaction_fees},
         {"Type": "Use", "Item": "Financing fees", "Amount": financing_fees},
-        {"Type": "Use", "Item": "Minimum cash funded", "Amount": entry.minimum_cash},
+        {"Type": "Use", "Item": "Minimum cash funding", "Amount": entry.minimum_cash_funding},
     ]
     rows.extend(
         {"Type": "Source", "Item": name, "Amount": amount}
@@ -78,14 +86,20 @@ def build_debt_schedule(
 ) -> pd.DataFrame:
     """Model cash interest, PIK, amortization and an end-of-year cash sweep.
 
-    Cash interest uses the average balance before the year-end cash sweep. This
-    avoids a circular reference while recognizing mandatory amortization during
-    the year. PIK accrues on opening principal and is assumed tax-deductible.
+    Cash interest uses the average scheduled balance before the year-end cash
+    sweep. PIK accrues on opening principal and is assumed tax-deductible for
+    this simplified portfolio model. Jurisdiction-specific interest deduction
+    limits and NOL carryforwards are intentionally outside scope.
+
+    The model does not silently permit a liquidity deficit. If operating FCF
+    and mandatory amortization would push cash below the required minimum, the
+    case raises a liquidity-shortfall error. A real underwriting model would
+    normally add a revolver or another committed liquidity facility.
     """
 
     original_balances = initial_debt_amounts(entry, debt)
     balances = dict(original_balances)
-    opening_cash = entry.minimum_cash
+    opening_cash = entry.opening_cash
     rows: list[dict[str, float | int]] = []
 
     for year in range(1, entry.holding_period + 1):
@@ -133,15 +147,25 @@ def build_debt_schedule(
             - cash_taxes
         )
         cash_before_sweep = opening_cash + fcf_before_debt_paydown - total_mandatory
+        liquidity_shortfall = max(entry.minimum_cash - cash_before_sweep, 0.0)
+        if liquidity_shortfall > 0.01:
+            raise ValueError(
+                f"Liquidity shortfall in Year {year}: "
+                f"cash before optional sweep is {cash_before_sweep:,.2f} versus "
+                f"minimum cash of {entry.minimum_cash:,.2f}. "
+                "Add a revolver or revise the underwriting assumptions."
+            )
+
         excess_cash = max(cash_before_sweep - entry.minimum_cash, 0.0)
         sweep_budget = excess_cash * scenario.cash_sweep_pct
 
         for tranche in sorted(debt.tranches, key=lambda item: item.sweep_priority):
             if not tranche.cash_sweep_eligible or sweep_budget <= 0:
                 continue
-            available_principal = (
+            available_principal = max(
                 tranche_work[tranche.name]["Opening"]
-                - tranche_work[tranche.name]["Mandatory Amortization"]
+                - tranche_work[tranche.name]["Mandatory Amortization"],
+                0.0,
             )
             sweep = min(available_principal, sweep_budget)
             tranche_work[tranche.name]["Cash Sweep"] = sweep
@@ -176,6 +200,8 @@ def build_debt_schedule(
                 "Cash Before Sweep": cash_before_sweep,
                 "Cash Sweep": total_sweep,
                 "Closing Cash": closing_cash,
+                "Minimum Cash": entry.minimum_cash,
+                "Liquidity Headroom": closing_cash - entry.minimum_cash,
                 "Total Debt": total_debt,
                 "Net Debt": net_debt,
                 "Net Debt / EBITDA": net_debt / row["EBITDA"],
