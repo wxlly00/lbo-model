@@ -58,7 +58,8 @@ def test_ev_to_equity_purchase_price_bridge_with_existing_debt_and_cash():
 
 def test_primary_scenarios_keep_financing_policy_constant():
     sweep_rates = {scenario.cash_sweep_pct for scenario in DEFAULT_SCENARIOS.values()}
-    assert sweep_rates == {pytest.approx(0.75)}
+    assert len(sweep_rates) == 1
+    assert next(iter(sweep_rates)) == pytest.approx(0.75)
 
 
 def test_debt_roll_forward(base_case):
