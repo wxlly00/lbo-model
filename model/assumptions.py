@@ -14,6 +14,8 @@ class EntryAssumptions:
     entry_revenue: float = 300_000_000.0
     entry_ebitda_margin: float = 0.20
     entry_multiple: float = 7.50
+    existing_debt: float = 0.0
+    existing_cash: float = 0.0
     transaction_fee_pct: float = 0.02
     financing_fee_pct: float = 0.02
     minimum_cash: float = 5_000_000.0
@@ -27,6 +29,24 @@ class EntryAssumptions:
     @property
     def entry_enterprise_value(self) -> float:
         return self.entry_ebitda * self.entry_multiple
+
+    @property
+    def equity_purchase_price(self) -> float:
+        """Bridge enterprise value to the equity purchase price paid to sellers."""
+
+        return self.entry_enterprise_value - self.existing_debt + self.existing_cash
+
+    @property
+    def minimum_cash_funding(self) -> float:
+        """Incremental cash that must be funded to preserve minimum liquidity."""
+
+        return max(self.minimum_cash - self.existing_cash, 0.0)
+
+    @property
+    def opening_cash(self) -> float:
+        """Cash available on the acquired balance sheet immediately after close."""
+
+        return self.existing_cash + self.minimum_cash_funding
 
 
 @dataclass(frozen=True)
@@ -100,30 +120,30 @@ DEFAULT_DEBT = DebtAssumptions(
     )
 )
 
-# The capital structure is held constant across cases so that the operating and
-# exit risks remain comparable. The cash-sweep percentage is the debt-policy
-# variable that changes by scenario.
+# Financing policy is held constant across Bear / Base / Bull so that the
+# primary scenario comparison isolates operating performance and exit value.
+COMMON_CASH_SWEEP_PCT = 0.75
 DEFAULT_SCENARIOS = {
     "Bear": Scenario(
         name="Bear",
         revenue_growth=0.030,
         annual_margin_expansion=0.000,
         exit_multiple=6.50,
-        cash_sweep_pct=0.50,
+        cash_sweep_pct=COMMON_CASH_SWEEP_PCT,
     ),
     "Base": Scenario(
         name="Base",
         revenue_growth=0.070,
         annual_margin_expansion=0.005,
         exit_multiple=7.50,
-        cash_sweep_pct=0.75,
+        cash_sweep_pct=COMMON_CASH_SWEEP_PCT,
     ),
     "Bull": Scenario(
         name="Bull",
         revenue_growth=0.100,
         annual_margin_expansion=0.0075,
         exit_multiple=8.50,
-        cash_sweep_pct=1.00,
+        cash_sweep_pct=COMMON_CASH_SWEEP_PCT,
     ),
 }
 
@@ -140,8 +160,10 @@ def validate_assumptions(
         raise ValueError("Entry revenue and EBITDA margin must be positive.")
     if entry.entry_multiple <= 0 or entry.holding_period < 1:
         raise ValueError("Entry multiple and holding period must be positive.")
-    if entry.minimum_cash < 0:
-        raise ValueError("Minimum cash cannot be negative.")
+    if min(entry.existing_debt, entry.existing_cash, entry.minimum_cash) < 0:
+        raise ValueError("Existing debt, existing cash and minimum cash cannot be negative.")
+    if entry.equity_purchase_price <= 0:
+        raise ValueError("Equity purchase price must be positive.")
     for rate in (
         entry.transaction_fee_pct,
         entry.financing_fee_pct,
