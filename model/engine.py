@@ -57,6 +57,7 @@ def _run_checks(
     )
     debt_rollforward_error = 0.0
     minimum_debt_balance = float("inf")
+    sweep_overpayment = 0.0
     for tranche in debt.tranches:
         opening = debt_schedule[f"{tranche.name} Opening"]
         pik = debt_schedule[f"{tranche.name} PIK Interest"]
@@ -68,6 +69,11 @@ def _run_checks(
             debt_rollforward_error, float(difference.abs().max())
         )
         minimum_debt_balance = min(minimum_debt_balance, float(closing.min()))
+        available_for_sweep = (opening - amortization).clip(lower=0.0)
+        sweep_overpayment = max(
+            sweep_overpayment,
+            float((sweep - available_for_sweep).clip(lower=0.0).max()),
+        )
 
     cash_flow_error = (
         debt_schedule["EBITDA"]
@@ -94,17 +100,31 @@ def _run_checks(
     entry_ev_error = abs(
         entry.entry_enterprise_value - entry.entry_ebitda * entry.entry_multiple
     )
+    equity_purchase_price_row = sources_uses.loc[
+        (sources_uses["Type"] == "Use")
+        & (sources_uses["Item"] == "Equity purchase price"),
+        "Amount",
+    ]
+    equity_purchase_price_error = (
+        abs(float(equity_purchase_price_row.iloc[0]) - entry.equity_purchase_price)
+        if len(equity_purchase_price_row) == 1
+        else float("inf")
+    )
     expected_initial_debt = sum(initial_debt_amounts(entry, debt).values())
+    debt_source_names = {tranche.name for tranche in debt.tranches}
     actual_initial_debt = float(
         sources_uses.loc[
             (sources_uses["Type"] == "Source")
-            & (sources_uses["Item"] != "Sponsor equity"),
+            & (sources_uses["Item"].isin(debt_source_names)),
             "Amount",
         ].sum()
     )
     scenario_error = abs(
         float(returns["Exit EBITDA"])
         - float(operating_model.loc[entry.holding_period, "EBITDA"])
+    )
+    minimum_liquidity_gap = max(
+        entry.minimum_cash - float(debt_schedule["Closing Cash"].min()), 0.0
     )
 
     tests = [
@@ -119,6 +139,12 @@ def _run_checks(
             entry_ev_error,
             tolerance,
             "Entry EBITDA multiplied by the entry multiple equals entry EV.",
+        ),
+        (
+            "EV to equity purchase price",
+            equity_purchase_price_error,
+            tolerance,
+            "Entry EV less existing debt plus existing cash equals equity purchase price.",
         ),
         (
             "Initial debt sizing",
@@ -139,6 +165,12 @@ def _run_checks(
             "No tranche is repaid below zero.",
         ),
         (
+            "Cash sweep capped by debt",
+            sweep_overpayment,
+            tolerance,
+            "Optional sweep never exceeds debt available after mandatory amortization.",
+        ),
+        (
             "Free cash flow bridge",
             float(cash_flow_error),
             tolerance,
@@ -149,6 +181,12 @@ def _run_checks(
             float(cash_rollforward_error),
             tolerance,
             "Opening cash plus FCF less debt repayment equals closing cash.",
+        ),
+        (
+            "Minimum liquidity",
+            minimum_liquidity_gap,
+            tolerance,
+            "Closing cash remains at or above the required minimum liquidity.",
         ),
         (
             "Exit EV to equity bridge",
