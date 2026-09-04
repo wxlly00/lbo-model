@@ -1,135 +1,137 @@
-# LBO Model — Private Equity Analysis
+# LBO Investment Model
 
-> End-to-end Leveraged Buyout financial model with multi-scenario returns analysis
+A transparent Python and Excel leveraged buyout model for a fictional European industrial components distributor. The case connects operating performance, cash conversion, debt repayment and exit valuation to sponsor returns across Bear, Base and Bull scenarios.
 
-[![Python](https://img.shields.io/badge/Python-3.11-blue)](https://python.org)
-[![Finance](https://img.shields.io/badge/Domain-Private%20Equity-purple)]()
+## Investment Case
 
-## Deal Overview
+Northstar Components is a fictional distributor serving recurring maintenance and replacement demand across fragmented industrial end markets. The underwriting case assumes that revenue growth, measured margin improvement and disciplined cash conversion can reduce leverage while preserving strategic flexibility.
 
-| Parameter | Value |
-|-----------|-------|
-| Target | TechRetail SA |
-| Entry EV | €450M |
-| Entry Multiple | 7.5x EBITDA |
-| Senior Debt | €247.5M @ 6% |
-| Mezzanine (PIK) | €67.5M @ 10% |
-| Equity | €135M (30%) |
-| Holding Period | 5 years |
+The central risks are slower end-market growth, failure to deliver margin improvement, PIK accumulation and exit-multiple contraction. The model therefore holds the entry capital structure constant across scenarios and changes operating performance, exit valuation and the cash-sweep percentage.
 
-## Model Components
+## Transaction Overview
 
-- **Income Statement** — Revenue CAGR 8%, margin expansion +1%/yr, D&A and EBIT projections
-- **Debt Schedule** — Senior mandatory amortization (5%/yr) + Mezzanine PIK accrual
-- **Cash Flow Model** — EBITDA → FCF with capex, working capital, and debt service
-- **Exit Analysis** — Bear/Base/Bull scenarios with IRR, MOIC, and DPI calculation
-- **Excel Output** — Professional 3-sheet Excel file with formatted tables
+All amounts are fictional and shown in EUR.
 
-## Exit Scenarios
+| Metric | Amount |
+|---|---:|
+| Entry Revenue | €300.0M |
+| Entry EBITDA | €60.0M |
+| Entry EBITDA Margin | 20.0% |
+| Entry Multiple | 7.5x |
+| Entry Enterprise Value | €450.0M |
+| Initial Gross Debt | €270.0M |
+| Initial Gross Leverage | 4.5x |
+| Sponsor Equity | €199.4M |
 
-| Scenario | Multiple | IRR | MOIC |
-|----------|----------|-----|------|
-| Bear Case | 6.0x | ~15% | ~2.2x |
-| Base Case | 7.5x | ~22% | ~3.1x |
-| Bull Case | 9.0x | ~29% | ~4.2x |
+Sources & Uses includes €9.0M of transaction fees, €5.4M of financing fees and €5.0M of minimum cash. Debt comprises a €180.0M Term Loan A, a €60.0M Term Loan B and a €30.0M subordinated PIK note.
 
-## Tech Stack
+## Operating Case
 
-`Python 3.11` `pandas` `numpy` `openpyxl` `tabulate`
+| Assumption | Bear | Base | Bull |
+|---|---:|---:|---:|
+| Annual Revenue Growth | 3.0% | 7.0% | 10.0% |
+| Annual EBITDA Margin Expansion | 0 bps | 50 bps | 75 bps |
+| Exit EBITDA Margin | 20.0% | 22.5% | 23.8% |
+| Exit Multiple | 6.5x | 7.5x | 8.5x |
+| Cash Sweep | 50% | 75% | 100% |
+
+The common operating assumptions are D&A at 4.0% of revenue, CapEx at 3.0% of revenue, NWC at 15.0% of revenue and a 28.0% cash tax rate. Change in NWC is calculated from the annual NWC balance rather than as a percentage of total revenue.
+
+![Revenue and EBITDA evolution](assets/revenue_ebitda.png)
+
+## Value Creation
+
+The Base Case increases sponsor equity value from €199.4M at entry to €618.9M at exit.
+
+| Component | Contribution |
+|---|---:|
+| EBITDA Growth | €260.0M |
+| Multiple Expansion / (Contraction) | €0.0M |
+| Gross Debt Paydown | €167.4M |
+| Change in Cash | €13.6M |
+| Entry and Exit Fees | (€21.5M) |
+
+The value-creation bridge reconciles to exit sponsor equity. With the Base Case exit multiple equal to the entry multiple, returns are driven by EBITDA growth and deleveraging rather than multiple expansion.
+
+![Sponsor equity value creation](assets/equity_value_creation.png)
+
+## Returns
+
+| Scenario | Exit EBITDA | Exit Equity Value | Debt Paydown | Exit Net Leverage | MOIC | IRR |
+|---|---:|---:|---:|---:|---:|---:|
+| Bear | €69.6M | €324.8M | €117.7M | 1.77x | 1.63x | 10.3% |
+| Base | €94.7M | €618.9M | €167.4M | 0.89x | 3.10x | 25.4% |
+| Bull | €114.7M | €909.8M | €209.2M | 0.49x | 4.56x | 35.5% |
+
+IRR assumes one sponsor outflow at entry, no interim dividends and one realization at exit.
+
+## Deleveraging
+
+The debt schedule calculates cash interest on average pre-sweep balances, mandatory amortization by tranche, PIK interest on opening principal and an end-of-year cash sweep. The PIK note grows from €30.0M to €48.3M in the Base Case while cash-pay debt is reduced more quickly.
+
+| Base Case | Year 1 | Year 2 | Year 3 | Year 4 | Year 5 |
+|---|---:|---:|---:|---:|---:|
+| Gross Debt | €249.3M | €221.5M | €188.0M | €148.6M | €102.6M |
+| Closing Cash | €9.7M | €12.1M | €14.2M | €16.3M | €18.6M |
+| Net Debt | €239.6M | €209.4M | €173.8M | €132.3M | €84.1M |
+| Net Debt / EBITDA | 3.64x | 2.90x | 2.20x | 1.53x | 0.89x |
+
+![Debt paydown](assets/debt_paydown.png)
+
+![Net leverage](assets/net_leverage.png)
+
+## Sensitivities
+
+The model re-runs operating cash flow, debt paydown and exit returns for each sensitivity cell. It includes:
+
+- Entry Multiple × Exit Multiple sensitivity for IRR
+- Exit Multiple × Exit EBITDA CAGR sensitivity for IRR
+- Holding period sensitivity from three to seven years
+
+![IRR sensitivity heatmap](assets/irr_sensitivity_heatmap.png)
+
+## Model Architecture
+
+| Module | Responsibility |
+|---|---|
+| `model/assumptions.py` | Entry, operating, debt and scenario assumptions |
+| `model/operating_model.py` | Revenue, EBITDA, D&A, EBIT, CapEx and NWC projection |
+| `model/debt.py` | Sources & Uses, cash interest, PIK, amortization and cash sweep |
+| `model/returns.py` | Exit equity bridge, MOIC, IRR and value creation |
+| `model/sensitivity.py` | Return sensitivities with full model recalculation |
+| `model/excel_export.py` | Six-sheet professional Excel workbook |
+| `model/charts.py` | README and presentation chart assets |
+| `model/engine.py` | Model orchestration and financial consistency checks |
+
+The Python model is the source of truth. The Excel workbook is generated from the same calculated schedules and contains `Summary`, `Assumptions`, `Operating Model`, `Debt Schedule`, `Returns` and `Sensitivities` sheets.
 
 ## How to Run
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 python lbo_model.py
+pytest
 ```
 
-Output: Formatted tables in terminal + `lbo_output.xlsx`
+The command generates:
 
-## Key Concepts
+- `outputs/LBO_Investment_Model.xlsx`
+- Six charts in `assets/`
 
-- **MOIC** (Multiple on Invested Capital): Exit Equity / Entry Equity
-- **IRR**: Annualized return solving for NPV = 0
-- **PIK** (Payment-in-Kind): Mezzanine interest accrues to principal (no cash payment)
-- **Debt waterfall**: Senior repaid first from FCF before mezz
+## Model Checks
 
-## Model Inputs Reference
+The model reports explicit checks for Sources = Uses, entry EV, initial debt sizing, debt roll-forwards, non-negative debt balances, the FCF bridge, cash roll-forward, exit EV to equity value and scenario consistency. The generated Base Case passes all nine checks.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENTRY_EV` | €450M | Enterprise Value paid at acquisition |
-| `ENTRY_EBITDA` | €60M | LTM EBITDA at entry (7.5× multiple) |
-| `REVENUE_Y0` | €300M | Base year revenue |
-| `EBITDA_MARGIN_Y0` | 20% | Base EBITDA margin |
-| `REVENUE_CAGR` | 8% | Annual revenue growth assumption |
-| `MARGIN_EXPANSION` | +1%/yr | EBITDA margin improvement per year |
-| `DA_PCT` | 4% | D&A as % of revenue |
-| `CAPEX_PCT` | 3% | CapEx as % of revenue |
-| `WC_CHANGE_PCT` | 1% | NWC increase as % of revenue |
-| `TAX_RATE` | 28% | Corporate tax rate |
-| `HOLDING_YEARS` | 5 | Investment horizon |
-| `SENIOR_DEBT` | €247.5M | Senior tranche (55% of EV @ 6%) |
-| `SENIOR_AMORT_PCT` | 5%/yr | Mandatory annual principal repayment |
-| `MEZZ_DEBT` | €67.5M | Mezzanine tranche (15% of EV @ 10% PIK) |
-| `EQUITY` | €135M | Sponsor equity (30% of EV) |
-| `EXIT_SCENARIOS` | 6×/7.5×/9× | Bear / Base / Bull exit multiples |
+## Limitations
 
-## How to Adapt to a Real Case
+The transaction and company are entirely fictional. This project is an analytical and portfolio exercise and does not represent transaction experience, investment advice or a production underwriting model.
 
-This model uses fictional data for **TechRetail SA**. Here's how to plug in a real deal:
-
-### 1. Update Entry Assumptions
-Edit the constants at the top of `lbo_model.py`:
-```python
-COMPANY      = "Your Target Name"
-ENTRY_EV     = 600_000_000   # Actual negotiated EV
-ENTRY_EBITDA = 80_000_000    # LTM or NTM EBITDA from data room
-REVENUE_Y0   = 400_000_000   # Last fiscal year revenue
-```
-
-### 2. Calibrate Growth & Margins
-Source your assumptions from:
-- Management projections (data room)
-- Comparable company CAGR (industry reports)
-- Conservative "sponsor case" haircut (typically −1 to −2% vs mgmt)
-
-```python
-REVENUE_CAGR     = 0.06    # e.g. more conservative than mgmt's 9%
-MARGIN_EXPANSION = 0.005   # e.g. +50bps/yr if operational improvements planned
-```
-
-### 3. Adjust Debt Structure
-Match your actual financing package:
-```python
-SENIOR_DEBT      = 0.55 * ENTRY_EV   # Adjust leverage multiple
-SENIOR_RATE      = 0.07              # Current market rate (SOFR + spread)
-MEZZ_DEBT        = 0.10 * ENTRY_EV   # May be 0 if no mezz tranche
-MEZZ_RATE        = 0.12              # PIK or cash-pay
-EQUITY           = ENTRY_EV - SENIOR_DEBT - MEZZ_DEBT
-```
-
-### 4. Set Exit Scenarios
-Use sector-specific EV/EBITDA comps for exit multiple assumptions:
-```python
-EXIT_SCENARIOS = {
-    "Bear Case": 5.5,   # Sector compression / distressed market
-    "Base Case": 7.0,   # In-line with entry / slight re-rating
-    "Bull Case": 8.5,   # Strong growth + multiple expansion
-}
-```
-
-### 5. Validate IRR vs Hurdle Rate
-- Typical PE hurdle: **20%+ IRR**, **2.5× MOIC**
-- If Base Case IRR < 15%, revisit entry price or structure
-
-### 6. Add Real Taxes & Fees
-For a full model also account for:
-- Transaction fees (typically 2–3% of EV)
-- Management fees (1–2% of equity/year)
-- Exit fees and carry structure
-- Tax shield on interest (already included via EBIT → net income bridge)
+The model does not include a full three-statement balance sheet, purchase accounting, tax-loss carryforwards, a revolver draw, management incentive dilution or interim sponsor distributions. PIK interest is assumed tax-deductible, mandatory amortization occurs during the year, and the cash sweep occurs at year-end. Cash interest uses average pre-sweep debt to avoid a circular reference. Any real underwriting case would require diligence-backed operating drivers, legal debt terms and jurisdiction-specific tax analysis.
 
 ## Author
 
-**Wilfried LAWSON HELLU** | Finance Analyst  
-📧 wilfriedlawpro@gmail.com | 🔗 [LinkedIn](https://linkedin.com/in/wilfried-lawsonhellu) | 🐙 [GitHub](https://github.com/Wxlly00)
+**Wilfried LAWSON HELLU**
+
+Finance × Data × Software
