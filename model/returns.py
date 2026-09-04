@@ -80,10 +80,17 @@ def calculate_returns(
         moic = calculate_moic(entry_equity, exit_equity)
         irr = calculate_irr(entry_equity, exit_equity, exit_year)
 
+    debt_source_names = {
+        item
+        for item in sources_uses.loc[
+            sources_uses["Type"] == "Source", "Item"
+        ].tolist()
+        if item != "Sponsor equity"
+    }
     initial_debt = float(
         sources_uses.loc[
             (sources_uses["Type"] == "Source")
-            & (sources_uses["Item"] != "Sponsor equity"),
+            & (sources_uses["Item"].isin(debt_source_names)),
             "Amount",
         ].sum()
     )
@@ -135,7 +142,7 @@ def build_value_creation_bridge(
             exit_ebitda * (exit_multiple - entry.entry_multiple),
         ),
         ("Gross debt paydown", initial_debt - closing_debt),
-        ("Change in cash", closing_cash - entry.minimum_cash),
+        ("Change in cash", closing_cash - entry.opening_cash),
         ("Entry fees", -entry_fees),
         ("Exit fees", -float(returns["Less: Exit Fees"])),
     ]
